@@ -1,0 +1,154 @@
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bubble Chart Example</title>
+    <link rel="stylesheet" href="css/bubble.css">
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    
+</head>
+<body>
+    <div class="container">
+        <div class="container">
+            <h1>AI-Powered Job Market Insights</h1>
+            <p>
+                Explore the impact of artificial intelligence on the global job market through interactive visualizations.
+            </p>
+            <h2>Job Locations on a World Map</h2>
+        <h1>FORCE SIMULATION</h1>
+        <nav class="navbar navbar-light bg-light text-center">
+            <div class="container-fluid">
+                <div class="btn-group w-100 justify-content-center" role="group" aria-label="Navigation">
+                    <a href="index.html" class="btn btn-secondary" role="button">GEOSPATIAL VISUALIZATION</a>
+                    <a href="bar.html" class="btn btn-secondary" role="button">BAR CHART</a>
+                    <a href="bubble.html" class="btn btn-secondary" role="button">FORCE SIMULATION</a>
+                </div>
+            </div>
+        </nav>
+        <div class="dropdown-container">
+            <label for="industry-select">Select Industry:</label>
+            <select id="industryDropdown" class="industry-dropdown">
+                <option value="Entertainment">Entertainment</option>
+                <option value="Technology">Technology</option>
+                <option value="Retail">Retail</option>
+                <option value="Education">Education</option>
+                <option value="Finance">Finance</option>
+                <option value="Transportation">Transportation</option>
+                <option value="Telecommunications">Telecommunications</option>
+                <option value="Manufacturing">Manufacturing</option>
+                <option value="Healthcare">Healthcare</option>
+                <option value="Energy">Energy</option>
+            </select>
+        </div>
+        <svg width="960" height="600"></svg>
+    </div>
+    <div id="tooltip"></div>
+    <script>
+        const svg = d3.select("svg"),
+              width = +svg.attr("width"),
+              height = +svg.attr("height");
+
+        const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+        const pack = d3.pack()
+            .size([width, height])
+            .padding(1.5);
+
+        const tooltip = d3.select(".tooltip");
+
+        d3.csv("ai_job_market_insights_with_coordinates.csv").then(data => {
+            data.forEach(d => {
+                d.Salary_USD = +d.Salary_USD; // Ensure the salary is a number
+            });
+
+            const dropdown = d3.select("#industryDropdown");
+            dropdown.on("change", updateChart);
+
+            function updateChart() {
+                const selectedIndustry = dropdown.property("value");
+                const filteredData = data.filter(d => d.Industry === selectedIndustry);
+
+                const jobTitles = [
+                    "Cybersecurity Analyst",
+                    "Marketing Specialist",
+                    "AI Researcher",
+                    "Sales Manager",
+                    "UX Designer",
+                    "HR Manager",
+                    "Product Manager",
+                    "Software Engineer",
+                    "Data Scientist",
+                    "Operations Manager"
+                ];
+
+                const maxSalaries = jobTitles.map(title => {
+                    const maxSalary = d3.max(filteredData.filter(d => d.Job_Title === title), d => d.Salary_USD);
+                    const location = filteredData.find(d => d.Job_Title === title)?.Location || "Unknown";
+                    return {
+                        Job_Title: title,
+                        Salary_USD: maxSalary != null && !isNaN(maxSalary) ? maxSalary : 0, // Handle undefined or NaN values
+                        Location: location
+                    };
+                });
+
+                const root = d3.hierarchy({children: maxSalaries})
+                    .sum(d => d.Salary_USD);
+
+                const nodes = pack(root).leaves();
+
+                // Create force simulation
+                const simulation = d3.forceSimulation(nodes)
+                    .force("center", d3.forceCenter(width / 2, height / 2))
+                    .force("x", d3.forceX(width / 2).strength(0.05))
+                    .force("y", d3.forceY(height / 2).strength(0.05))
+                    .force("collide", d3.forceCollide().radius(d => d.r + 1))
+                    .on("tick", ticked);
+
+                // Function to update positions of circles
+                function ticked() {
+                    node.attr("transform", d => `translate(${d.x},${d.y})`);
+                }
+
+                // Create nodes
+                const node = svg.selectAll(".node")
+                    .data(nodes, d => d.data.Job_Title);
+
+                node.exit().remove();
+
+                const nodeEnter = node.enter().append("g")
+                    .attr("class", "node")
+                    .attr("transform", d => `translate(${d.x},${d.y})`);
+
+                    const tooltip = d3.select("#tooltip");
+
+nodeEnter.append("circle")
+    .attr("id", d => d.data.Job_Title)
+    .attr("r", d => d.r)
+    .style("fill", d => color(d.data.Job_Title))
+    .on("mouseover", (event, d) => {
+        tooltip.transition().duration(200).style("opacity", 1);
+        tooltip.html(`Location: ${d.data.Location}<br>Max Salary: $${Math.round(d.data.Salary_USD)}`)
+            .style("left", (event.pageX + 5) + "px")
+            .style("top", (event.pageY - 28) + "px");
+    })
+    .on("mouseout", () => {
+        tooltip.transition().duration(500).style("opacity", 0);
+    });
+
+nodeEnter.append("text")
+    .attr("text-anchor", "middle")
+    .attr("alignment-baseline", "middle")
+    .attr("font-size", "13px")
+    .style("font-family", "sans-serif")
+    .style("fill", "#333")
+    .text(d => d.data.Job_Title);
+
+node.merge(nodeEnter)
+    .attr("transform", d => `translate(${d.x},${d.y})`);
+
+simulation.nodes(nodes);
+            }
+
+            updateChart(); // Initial chart rendering
+        });
+    </script>
+</body>

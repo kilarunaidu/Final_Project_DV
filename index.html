@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered Job Market Insights</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+
+
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="https://d3js.org/topojson.v1.min.js"></script>
+    <script src="https://unpkg.com/versor"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="container">
+            <h1>AI-Powered Job Market Insights</h1>
+            <p>
+                Explore the impact of artificial intelligence on the global job market through interactive visualizations.
+            </p>
+            <h2>Job Locations on a World Map</h2>
+        <h1>GEOSPATIAL VISUALIZATION</h1>
+        <nav class="navbar navbar-light bg-light text-center">
+            <div class="container-fluid">
+                <div class="btn-group w-100 justify-content-center" role="group" aria-label="Navigation">
+                    <a href="index.html" class="btn btn-secondary" role="button">GEOSPATIAL VISUALIZATION</a>
+                    <a href="bar.html" class="btn btn-secondary" role="button">BAR CHART</a>
+                    <a href="bubble.html" class="btn btn-secondary" role="button">FORCE SIMULATION</a>
+                </div>
+            </div>
+        </nav>
+        <div class="dropdown-container">
+            <label for="industry-select">Select Industry:</label>
+            <select id="industry-select" class="industry-dropdown">
+                <option value="all">All Industries</option>
+                <option value="Entertainment">Entertainment</option>
+                <option value="Technology">Technology</option>
+                <option value="Retail">Retail</option>
+                <option value="Education">Education</option>
+                <option value="Finance">Finance</option>
+                <option value="Transportation">Transportation</option>
+                <option value="Telecommunications">Telecommunications</option>
+                <option value="Manufacturing">Manufacturing</option>
+                <option value="Healthcare">Healthcare</option>
+                <option value="Energy">Energy</option>
+            </select>
+        </div>
+    </div>
+        <!-- Add this after the industry dropdown -->
+        <div class="slider-container">
+            <label for="salary-range">Salary Range: <span id="salary-value">$0 - $140,000</span></label>
+            <input type="range" 
+                   id="salary-range" 
+                   min="0" 
+                   max="140000" 
+                   step="10000" 
+                   value="140000"
+                   class="salary-slider">
+        </div>
+        <div id="world-map"></div>
+        <h2>Filtered Data</h2>
+        <table id="dataTable" class="display">
+            <thead>
+                <tr>
+                    <th>Location</th>
+                    <th>Industry</th>
+                    <th>Salary (USD)</th>
+                    <th>Automation Risk</th>
+                    <th>Company Size</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Filtered data will populate here -->
+            </tbody>
+        </table>
+    </div>
+
+    <div id="tooltip" class="tooltip"></div>
+
+    <footer>
+        &copy; 2024 AI-Powered Job Market Insights. Created by Group 8.
+    </footer>
+
+    <script>
+    $(document).ready(function () {
+     
+                function datasTable(){
+                    $('#dataTable').DataTable({
+                        paging: true,       // Enables pagination
+                        searching: true,    // Enables search/filter
+                        ordering: true,     // Enables column sorting
+                        pageLength: 10,     // Default number of rows per page
+                        lengthChange: true, // Allows the user to change rows per page
+                    });
+                }
+             
+        const width = 1200;
+        const height = 800;
+        const sphere = {type: "Sphere"};
+
+        const projection = d3.geoOrthographic()
+            .scale(400)
+            .translate([width / 2, height / 2])
+            .clipAngle(90);
+
+        const canvas = d3.select("#world-map")
+            .append("canvas")
+            .attr("width", width)
+            .attr("height", height);
+
+        const context = canvas.node().getContext("2d");
+        const path = d3.geoPath(projection, context);
+
+        // Add these variables at the top with other declarations
+        let v0, q0, r0;
+        let currentFilteredData;
+
+        function populateTable(data) {
+            if ($.fn.DataTable.isDataTable('#dataTable')) {
+                    $('#dataTable').DataTable().destroy();
+                }
+            const tableBody = d3.select("#dataTable tbody");
+            tableBody.html("");
+            data.forEach(d => {
+                const row = tableBody.append("tr");
+                row.append("td").text(d.Location);
+                row.append("td").text(d.Industry);
+                row.append("td").text(d.Salary_USD.toLocaleString());
+                row.append("td").text(d.Automation_Risk);
+                row.append("td").text(d.Company_Size);
+            });
+         
+             datasTable();
+        }
+
+        function render(land) {
+            context.clearRect(0, 0, width, height);
+            context.beginPath();
+            path(sphere);
+            context.fillStyle = "#fff";
+            context.fill();
+            context.beginPath();
+            path(land);
+            context.fillStyle = "#ccc";
+            context.fill();
+            context.beginPath();
+            path(sphere);
+            context.strokeStyle = "#000";
+            context.stroke();
+        }
+
+        function isValidCoordinate(lon, lat) {
+            return !isNaN(lon) && !isNaN(lat) && 
+                   lon >= -180 && lon <= 180 && 
+                   lat >= -90 && lat <= 90;
+        }
+
+        // Make land variable accessible
+        let land; // Declare at global scope
+
+        // Add this function to handle dropdown changes
+        function setupIndustryFilter(cityData, land) {
+            const dropdown = d3.select("#industry-select");
+            
+            // Initialize with all data
+            currentFilteredData = cityData;
+            
+            dropdown.on("change", function() {
+                const selectedIndustry = this.value;
+                console.log("Selected industry:", selectedIndustry);
+                
+                // Update filtered data
+                currentFilteredData = selectedIndustry === "all" 
+                    ? cityData 
+                    : cityData.filter(d => d.Industry === selectedIndustry);
+                
+                // Reset projection and transform
+                projection.rotate([0, 0, 0])
+                         .scale(400)
+                         .translate([width / 2, height / 2]);
+                
+                // Clear and re-render with filtered data
+                context.clearRect(0, 0, width, height);
+                render(land);
+                renderPoints(currentFilteredData, land);
+                
+                // Reset zoom transform
+                canvas.call(d3.zoom().transform, d3.zoomIdentity);
+            });
+        }
+
+        // Add after setupIndustryFilter
+        function setupSalaryFilter(cityData, land) {
+            const slider = document.getElementById('salary-range');
+            const salaryValue = document.getElementById('salary-value');
+            
+            slider.addEventListener('input', function() {
+                const maxSalary = this.value;
+                salaryValue.textContent = `$0 - $${parseInt(maxSalary).toLocaleString()}`;
+                
+                // Filter by both industry and salary
+                const selectedIndustry = d3.select("#industry-select").node().value;
+                
+                currentFilteredData = cityData.filter(d => {
+                    const matchesIndustry = selectedIndustry === "all" || d.Industry === selectedIndustry;
+                    const matchesSalary = d.Salary_USD <= maxSalary;
+                    return matchesIndustry && matchesSalary;
+                });
+                
+                // Update visualization
+                context.clearRect(0, 0, width, height);
+                render(land);
+                renderPoints(currentFilteredData, land);
+            });
+        }
+
+        // Update the Promise.all section to include dropdown setup
+        Promise.all([
+            d3.json("https://unpkg.com/world-atlas@2/land-110m.json"),
+            d3.csv("ai_job_market_insights_with_coordinates.csv")
+        ]).then(([worldData, rawCityData]) => {
+            // Initialize land here
+            land = topojson.feature(worldData, worldData.objects.land);
+            
+            const cityData = rawCityData
+                .map(d => {
+                    try {
+                        return {
+                            Location: d.Location,
+                            Longitude: +d.Longitude,
+                            Latitude: +d.Latitude, // Fixed case sensitivity
+                            Industry: d.Industry,
+                            Salary_USD: +d.Salary_USD,
+                            Automation_Risk: d.Automation_Risk,
+                            Company_Size: d.Company_Size
+                        };
+                    } catch (e) {
+                        console.error("Error parsing row:", d, e);
+                        return null;
+                    }
+                })
+                .filter(d => isValidCoordinate(d.Longitude, d.Latitude));
+
+            // Initialize visualization
+            render(land);
+            renderPoints(cityData, land); // Pass land as parameter
+            
+            // Setup filters
+            setupIndustryFilter(cityData, land);
+            setupSalaryFilter(cityData, land);
+
+            // Add interactions
+            setupDragAndZoom(land, cityData);
+            
+        }).catch(error => {
+            console.error("Error loading or processing data:", error);
+        });
+
+        // Update renderPoints function to handle filtered data
+        function renderPoints(data, land) {
+            if (!data || data.length === 0) {
+                console.warn("No points to render");
+                return;
+            }
+
+            // Render base map
+            context.clearRect(0, 0, width, height);
+            render(land);
+
+            // Get current rotation for visibility check
+            const r = projection.rotate();
+            const center = [-r[0], -r[1]];
+
+            // Sort points by distance from center of view for proper layering
+            const pointsWithDistance = data
+                .map(d => ({
+                    ...d,
+                    distance: d3.geoDistance([d.Longitude, d.Latitude], center)
+                }))
+                .sort((a, b) => b.distance - a.distance); // Draw far points first
+
+            // Draw points with visibility check
+            pointsWithDistance.forEach(d => {
+                if (!d.Longitude || !d.Latitude) return;
+
+                // Check if point is on visible side of globe
+                const angle = d3.geoDistance([d.Longitude, d.Latitude], center);
+                if (angle > Math.PI / 2) return; // Skip points on far side
+
+                const coords = projection([d.Longitude, d.Latitude]);
+                if (coords) {
+                    const [x, y] = coords;
+                    context.beginPath();
+                    context.arc(x, y, 8, 0, 2 * Math.PI);
+                    // Adjust opacity based on distance from center
+                    const opacity = Math.max(0.2, 1 - (d.distance * 1.5));
+                    context.fillStyle = `rgba(255, 0, 0, ${opacity})`;
+                    context.fill();
+                    context.strokeStyle = "white";
+                    context.lineWidth = 2;
+                    context.stroke();
+                }
+            });
+
+            // Keep existing hover detection code...
+            canvas.on("mousemove", function(event) {
+                const [mx, my] = d3.pointer(event, canvas.node());
+                console.log(mx,my);
+                // Find nearest point from filtered data
+                const point = data.find(d => {
+                    const coords = projection([d.Longitude, d.Latitude]);
+                    if (!coords) return false;
+                    const [px, py] = coords;
+                    const distance = Math.sqrt((mx - px) ** 2 + (my - py) ** 2);
+                    return distance < 8;
+                });
+                
+                const tooltip = d3.select("#tooltip");
+                
+                if (point) {
+                    canvas.style.cursor = 'pointer';
+                    tooltip
+                        .style("opacity", 1)
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 10) + "px")
+                        .html(`
+                            <strong>${point.Location}</strong><br>
+                            Industry: ${point.Industry}<br>
+                            Salary: $${point.Salary_USD.toLocaleString()}<br>
+                            Automation Risk: ${point.Automation_Risk}<br>
+                            Company Size: ${point.Company_Size}
+                        `);
+                } else {
+                    tooltip.style("opacity", 0);
+                }
+
+                
+
+            });
+
+            // Clear tooltip when mouse leaves canvas
+            canvas.on("mouseout", function() {
+                d3.select("#tooltip").style("opacity", 0);
+            });
+        }
+
+        // Add helper function to find nearest point
+        function findNearestPoint(x, y, points = []) {
+                    if (!points || points.length === 0) return null; // Ensure points is not undefined or empty
+                    const threshold = 8; // Point radius
+                    return points.find(d => {
+                        const coords = projection([d.Longitude, d.Latitude]);
+                        if (!coords) return false;
+                        const [px, py] = coords;
+                        const distance = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
+                        return distance < threshold;
+                    });
+                }
+
+
+                canvas.on("click", function (event) {
+                            const [x, y] = d3.pointer(event, canvas.node());
+                            const nearestPoint = findNearestPoint(x, y, currentFilteredData); // Use filtered data
+
+                            if (nearestPoint) {
+                                $('html, body').animate(
+                                    {
+                                        scrollTop: $('#dataTable').offset().top,
+                                    },
+                                    500 // Animation duration in ms
+                                );
+                                const filteredData = currentFilteredData.filter(d => d.Location === nearestPoint.Location);
+                                populateTable(filteredData);
+                                $('#dataTable').focus();
+                            }
+                        });
+
+        function setupDragAndZoom(land, cityData) {
+            canvas.call(d3.drag()
+                .on("start", dragStarted)
+                .on("drag", dragged));
+            
+            canvas.call(d3.zoom()
+                .scaleExtent([1, 8])
+                .on("zoom", zoomed));
+                
+            function dragStarted(event) {
+                const [x, y] = d3.pointer(event, canvas.node());
+                v0 = versor.cartesian(projection.invert([x, y]));
+                q0 = versor(r0 = projection.rotate());
+            }
+            
+            function dragged(event) {
+                const [x, y] = d3.pointer(event, canvas.node());
+                const v1 = versor.cartesian(projection.rotate(r0).invert([x, y]));
+                const q1 = versor.multiply(q0, versor.delta(v0, v1));
+                projection.rotate(versor.rotation(q1));
+                render(land);
+                renderPoints(currentFilteredData, land); // Use filtered data
+            }
+            
+           
+
+            function zoomed(event) {
+                projection.scale(300 * event.transform.k);
+                render(land);
+                renderPoints(currentFilteredData, land); // Use filtered data
+            }
+        }
+    });
+    </script>
+</body>
+</html>
